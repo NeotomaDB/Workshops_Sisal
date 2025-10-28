@@ -1,0 +1,144 @@
+---
+title: "Testing Sandbox"
+author:
+  - name: "Socorro Dominguez Vidaña"
+    correspondence: false
+    email: dominguezvid@wisc.edu
+    orcid_id: 0000-0002-7926-4935
+institute:
+  - uwiscgeog:
+    name: "University of Wisconsin -- Madison: Department of Geography"
+date: "`r Sys.Date()`"
+always_allow_html: true
+output:
+  html_document:
+    code_folding: show
+    fig_caption: yes
+    keep_md: yes
+    self_contained: yes
+    theme: readable
+    toc: yes
+    toc_float: yes
+    css: "text.css"
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup, echo=FALSE}
+options(warn = -1)
+pacman::p_load(neotoma2, dplyr, ggplot2, sf, geojsonsf, leaflet, flextable, readr, stringr, tidyr, patchwork)
+```
+
+# Introduction
+
+This document/binder is intended to act as a sandbox for new neotoma2 functions for SISAL.
+
+We can work from a locally deployed API or from the development branch as of now.
+
+```{r sitename}
+# Setting the working environment. When the data is in production, this step can be ommitted.
+Sys.setenv(APIPOINT="local")
+```
+
+## Searching one cave
+```{r}
+kesang <- tryCatch({
+  neotoma2::get_sites(sitename = "%Kesang Cave%")
+}, error = function(e) {
+  readRDS("data/kesang.RDS")
+})
+plotLeaflet(kesang)
+```
+
+## Summary of Cave
+
+```{r summary}
+neotoma2::summary(kesang)
+```
+
+```{r filling_data}
+kesang_dl <- tryCatch({
+  kesang %>% 
+    neotoma2::filter(datasettype=="speleothem") %>% 
+    neotoma2::get_downloads()
+}, error = function(e) {
+  readRDS("data/kesang_dl.RDS")
+})
+kesang_dl
+```
+
+## Getting the Speleothem Data
+### `get_speleothems()`
+```{r speleothem_data}
+kesang_sp <- tryCatch({
+  neotoma2::get_speleothems(kesang_dl)
+}, error = function(e) {
+  readRDS("data/kesang_sp.RDS")
+})
+kesang_sp
+```
+
+### `speleothems` slot is in `collunits` slot.
+
+```{r speleothem_location}
+kesang_sp[[1]]@collunits[[2]]@speleothems[[1]]
+```
+### Displaying Speleothem MetaData `speleothems()`
+```{r show_speleothems_metadata}
+neotoma2::speleothems(kesang_sp)
+```
+
+
+### Displaying sample/speleothem data `speleothem_details()`
+```{r speleothem_data_detail}
+#data <- neotoma2::speleothemdetails(kesang_sp)
+data <- read.csv("data/kesang_data.csv")
+head(data)
+```
+
+## Taxa in Kesang
+```{r taxa}
+head(taxa(kesang_sp))
+```
+
+### Ordering the data in wide format `toWide()`
+
+```{r toWide}
+values <- kesang_sp[[1]] %>%
+  samples() %>%
+  toWide(ecologicalgroup = c("ITOP"),
+         unit = c("per mille"),
+         groupby = "age",
+         elementtype = NA,
+         operation = "sum") %>%
+  arrange(age) %>% na.omit()
+
+values %>% 
+  head() %>% 
+  flextable() %>% 
+  fontsize(size = 8, part = "all") %>%
+  autofit() 
+```
+```{r plotIsotopesCode, message=FALSE, warning=FALSE, out.width='90%'}
+
+# Make sure age is in descending order (younger to older)
+values <- values %>% arrange(desc(age))
+
+# d18O plot (top)
+p1 <- ggplot(values, aes(x = age, y = δ18O)) +
+  geom_line(color = "steelblue") +
+  #scale_x_reverse() +
+  theme_minimal() +
+  labs(y = expression(delta^{18}*O*" ("*"\u2030"*")"), x = NULL)
+
+# d13C plot (bottom)
+p2 <- ggplot(values, aes(x = age, y = δ13C)) +
+  geom_line(color = "darkgreen") +
+  #scale_x_reverse() +
+  theme_minimal() +
+  labs(y = expression(delta^{13}*C* "("*"\u2030"*")"), x = "Age (years BP)")
+
+# Combine the two plots and add a title
+(p1 / p2) + plot_annotation(title = paste('Data from',kesang_sp[[1]]$sitename))
+```
