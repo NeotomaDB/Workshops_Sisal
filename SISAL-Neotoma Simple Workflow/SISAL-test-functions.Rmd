@@ -38,7 +38,7 @@ We can work from a locally deployed API or from the development branch as of now
 
 ```{r sitename}
 # Setting the working environment. When the data is in production, this step can be ommitted.
-Sys.setenv(APIPOINT="local")
+Sys.setenv(APIPOINT="dev")
 ```
 
 ## Searching one cave
