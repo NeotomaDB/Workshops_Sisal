@@ -30,12 +30,6 @@ institute:
 date: "`r Sys.Date()`"
 always_allow_html: true
 output:
-  word_document: 
-    number_sections: true
-    fig_caption: yes
-    #self_contained: yes
-    toc: yes
-    #always_allow_html: true
   html_document:
     number_sections: true 
     code_folding: show
@@ -46,6 +40,12 @@ output:
     toc: yes
     toc_float: yes
     css: "text.css"
+  word_document: 
+    number_sections: true
+    fig_caption: yes
+    #self_contained: yes
+    toc: yes
+    #always_allow_html: true
   pdf_document:
     pandoc_args: "-V geometry:vmargin=1in -V geometry:hmargin=1in"
 csl: 'https://bit.ly/3khj0ZL'
@@ -176,7 +176,7 @@ In this workshop we want to highlight two key structural concepts:
 
 ![**Figure**. *The structure of sites, collection units, samples, and datasets within Neotoma. A site contains one or more collection units. Chronologies are associated with collection units. Samples with data of a common type (pollen, diatoms, vertebrate fauna) are assigned to a dataset.*](images/site_collunit_dataset_rev.png){width="50%"}
 
-![**Figure**. *(Placeholder) The structure of sites, collection units, samples, and datasets for Speleothems within Neotoma.*](images/cave_collectionunits.jpg){width="50%"}
+![**Figure**. *The structure of sites, collection units, samples, and datasets for Speleothems within Neotoma. Names in brackets are the Neotoma names.*](images/cave_collectionunits.jpg)
 
 Data in Neotoma is associated with **sites** -- specific locations with latitude and longitude coordinates.
 
