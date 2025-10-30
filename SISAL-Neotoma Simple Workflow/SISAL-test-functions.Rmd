@@ -38,7 +38,7 @@ We can work from a locally deployed API or from the development branch as of now
 
 ```{r sitename}
 # Setting the working environment. When the data is in production, this step can be ommitted.
-Sys.setenv(APIPOINT="dev")
+Sys.setenv(APIPOINT = "https://str99atgzk.us-east-2.awsapprunner.com/v2.0/")
 ```
 
 ## Searching one cave
@@ -92,8 +92,12 @@ neotoma2::speleothems(kesang_sp)
 
 ### Displaying sample/speleothem data `speleothem_details()`
 ```{r speleothem_data_detail}
-#data <- neotoma2::speleothemdetails(kesang_sp)
-data <- read.csv("data/kesang_data.csv")
+data <- tryCatch({
+  neotoma2::speleothemdetails(kesang_sp)
+}, error = function(e) {
+  read.csv("data/kesang_data.csv")
+})
+
 head(data)
 ```
 
@@ -105,7 +109,7 @@ head(taxa(kesang_sp))
 ### Ordering the data in wide format `toWide()`
 
 ```{r toWide}
-values <- kesang_sp[[1]] %>%
+values <- kesang_sp[[1]]@collunits[[1]] %>%
   samples() %>%
   toWide(ecologicalgroup = c("ITOP"),
          unit = c("per mille"),
@@ -120,11 +124,16 @@ values %>%
   fontsize(size = 8, part = "all") %>%
   autofit() 
 ```
-```{r plotIsotopesCode, message=FALSE, warning=FALSE, out.width='90%'}
 
+
+```{r data}
 # Make sure age is in descending order (younger to older)
 values <- values %>% arrange(desc(age))
+head(values)
+```
 
+
+```{r plotIsotopesCode, message=FALSE, warning=FALSE, out.width='90%'}
 # d18O plot (top)
 p1 <- ggplot(values, aes(x = age, y = δ18O)) +
   geom_line(color = "steelblue") +
