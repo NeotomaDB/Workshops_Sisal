@@ -151,3 +151,100 @@ p2 <- ggplot(values, aes(x = age, y = δ13C)) +
 # Combine the two plots and add a title
 (p1 / p2) + plot_annotation(title = paste('Data from',kesang_sp[[1]]$sitename))
 ```
+
+------
+
+I have copied some of the exercises in the simple workflow using the new neotoma2 functions for speleothems. 
+
+Please review them and let me know if there is any issue.
+
+Following some functions of the simple_workflow:
+
+```{r boundingBox}
+geoJSON <- '{"type": "Polygon",
+        "coordinates": [[
+            [-7.030,  36.011],
+            [-18.807, 23.537],
+            [-19.247, 10.282],
+            [-9.139,  -0.211],
+            [18.370, -37.546],
+            [35.069, -36.352],
+            [49.571, -27.097],
+            [58.185,   0.755],
+            [53.351,  13.807],
+            [43.946,  12.008],
+            [31.202,  33.629],
+            [18.897,  34.648],
+            [12.393,  35.583],
+            [11.075,  38.184],
+            [-7.030,  36.011]
+          ]
+        ]}'
+
+africa_sf <- geojsonsf::geojson_sf(geoJSON)
+
+# Note here we use the `all_data` flag to capture all the sites within the polygon.
+# We're using `all_data` here because we know that the site information is relatively small
+# for Africa. If we were working in a new area or with a new search we would limit the
+# search size.
+africa_sites <- neotoma2::get_sites(loc = africa_sf, all_data = TRUE)
+africa_sites
+```
+
+
+```{r datasetsFromSitesResult, message=FALSE}
+africa_datasets <- neotoma2::get_datasets(loc = africa_sf, all_data = TRUE)
+
+datasets(africa_datasets) %>% 
+  as.data.frame() %>% 
+  head() %>% 
+  flextable() %>% 
+  fontsize(size = 8, part = "all") %>%
+  width(width = 1.2) %>%
+  autofit() 
+```
+
+
+```{r downloadsCode}
+africa_speleothem <- africa_datasets %>% 
+  neotoma2::filter(datasettype == 'speleothem')
+
+neotoma2::summary(africa_speleothem) %>% 
+  head() %>% 
+  flextable() %>% 
+  fontsize(size = 8, part = "all") %>%
+  autofit() 
+```
+
+```{r taxaCode}
+africa_dl <- africa_speleothem %>% get_downloads() 
+
+as.data.frame(africa_dl) %>% 
+  head() %>% 
+  flextable() %>% 
+  fontsize(size = 8, part = "all") %>%
+  width(width = 1.2) %>%
+  autofit() 
+```
+
+```{r add_entityCode}
+africa_sp <- get_speleothems(africa_dl)
+africa_sp
+```
+
+```{r samp_w_entityCode}
+samp_w_entity <- speleothems(africa_sp)
+samp_w_entity
+```
+
+
+
+```{r taxa2Code, message=FALSE}
+neotomatx <- africa_dl %>% taxa()
+neotomatx %>% 
+  head() %>% 
+  flextable() %>% 
+  fontsize(size = 8, part = "all")  %>%
+  width(width = 1.2) %>%
+  autofit() 
+```
