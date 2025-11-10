@@ -38,7 +38,7 @@ We can work from a locally deployed API or from the development branch as of now
 
 ```{r sitename}
 # Setting the working environment. When the data is in production, this step can be ommitted.
-Sys.setenv(APIPOINT = "https://str99atgzk.us-east-2.awsapprunner.com/v2.0/")
+Sys.setenv(APIPOINT = "https://api-dev.neotomadb.org/v2.0/")
 ```
 
 ## Searching one cave
@@ -46,7 +46,7 @@ Sys.setenv(APIPOINT = "https://str99atgzk.us-east-2.awsapprunner.com/v2.0/")
 kesang <- tryCatch({
   neotoma2::get_sites(sitename = "%Kesang Cave%")
 }, error = function(e) {
-  readRDS("data/kesang.RDS")
+  NULL
 })
 plotLeaflet(kesang)
 ```
@@ -54,7 +54,7 @@ plotLeaflet(kesang)
 ## Summary of Cave
 
 ```{r summary}
-neotoma2::summary(kesang)
+neotoma2::getids(kesang)
 ```
 
 ```{r filling_data}
@@ -187,7 +187,7 @@ africa_sf <- geojsonsf::geojson_sf(geoJSON)
 # We're using `all_data` here because we know that the site information is relatively small
 # for Africa. If we were working in a new area or with a new search we would limit the
 # search size.
-africa_sites <- neotoma2::get_sites(loc = africa_sf, all_data = TRUE)
+africa_sites <- neotoma2::get_sites(loc = africa_sf, all_data = FALSE)
 africa_sites
 ```
 
