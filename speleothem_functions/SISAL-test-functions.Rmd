@@ -1,5 +1,5 @@
 ---
-title: "Testing Sandbox"
+title: "Tests with Gael_2022 and Gael_2015"
 author:
   - name: "Socorro Dominguez Vidaña"
     correspondence: false
@@ -11,18 +11,7 @@ institute:
 date: "`r Sys.Date()`"
 always_allow_html: true
 output:
-  html_document:
-    code_folding: show
-    fig_caption: yes
-    keep_md: yes
-    self_contained: yes
-    theme: readable
-    toc: yes
-    toc_float: yes
-    css: "text.css"
-editor_options: 
-  markdown: 
-    wrap: sentence
+  html_document
 ---
 
 ```{r setup, echo=FALSE}
@@ -43,73 +32,129 @@ Sys.setenv(APIPOINT = "https://api-dev.neotomadb.org/v2.0/")
 
 ## Searching one cave
 ```{r}
-kesang <- tryCatch({
-  neotoma2::get_sites(sitename = "%Kesang Cave%")
+vallina <- tryCatch({
+  neotoma2::get_sites(sitename = "%La Vallina%") %>%
+    get_datasets()
 }, error = function(e) {
-  NULL
+  message("Could not reach to the API")
 })
-plotLeaflet(kesang)
+plotLeaflet(vallina)
 ```
 
 ## Summary of Cave
 
-```{r summary}
-neotoma2::getids(kesang)
-```
+Since we applied `get_sites()` and `get_datasets()`, we can see all the datasets' IDs that are associated with Vallina Cave.
 
+We can see what kinds of datatypes exist in each of the collection units.
+
+In the neotoma model, all collection units should be in a site. The collection units are in the `collunits` slot of the `sites` object.
+
+```{r summary}
+neotoma2::summary(vallina)
+```
+## Getting Speleothem Data
+
+### `get_downloads()` goes first
+
+We can retrieve the speleothem data using the `get_speleothems()` function. But if we want to have all the data - including all sample data, we have to execute `get_downloads()` first. 
+
+`speleothems` cannot be linked directly to `sites` because of the way Neotoma works, so `speleothems` are contained in the `collunits` slot.
+
+This is only because of how the Neotoma model works. `get_speleothems()` will only modify the slots regarding `speleothems` data. But since that means overwriting the `collection unit` slot, we need to have the data downloaded first. If we do `get_downloads()` after, the `collection unit` slot will be overwritten again, and the `speleothems` data will be lost.
+
+In order to have a smoother download, we can first filter the datasets to only include `speleothem` datasets, and then download only those.
 ```{r filling_data}
-kesang_dl <- tryCatch({
-  kesang %>% 
+vallina_dl <- vallina %>% 
     neotoma2::filter(datasettype=="speleothem") %>% 
     neotoma2::get_downloads()
-}, error = function(e) {
-  readRDS("data/kesang_dl.RDS")
-})
-kesang_dl
+vallina_dl
 ```
 
-## Getting the Speleothem Data
-### `get_speleothems()`
+### `get_speleothems()` to retrieve `speleothem` metadata
+
 ```{r speleothem_data}
-kesang_sp <- tryCatch({
-  neotoma2::get_speleothems(kesang_dl)
-}, error = function(e) {
-  readRDS("data/kesang_sp.RDS")
-})
-kesang_sp
+vallina_sp <- neotoma2::get_speleothems(vallina_dl)
+vallina_sp
 ```
+We only have one site, **Vallina Cave**. This site has multiple collection units, and each collection unit can have one or more speleothems associated with it.
+
+To retrieve the speleothem metadata, we can access the `speleothems` slot within each `collunits` slot.
 
 ### `speleothems` slot is in `collunits` slot.
 
-```{r speleothem_location}
-kesang_sp[[1]]@collunits[[2]]@speleothems[[1]]
+We can see all the `collection units` in our site by doing:
+
+```{r speleothem_collunits}
+vallina_sp[[1]]@collunits
 ```
+
+Then, we can explore each speleothem by iterating over the `collunits` slot AND the `speleothems` slot. 
+Most of the times, one `collunit` only has one `speleothem` - but there could be more, or we could add more with the `set_` functions.
+```{r speleothem_metadata}
+# One one speleothem
+vallina_sp[[1]]@collunits[[1]]@speleothems[[1]]
+```
+```{r speleothem_metadata2}
+# One one speleothem
+all_gael <- vallina_sp[[1]]@collunits[[5]]@speleothems
+all_gael
+```
+
+In this case, if we want to see data specific to only one of the speleothems, we have to access one by one:
+
+```{r speleothem_metadata3}
+# Retrieving only Gael_2022
+gael2022 <- vallina_sp[[1]]@collunits[[5]]@speleothems[[1]]
+gael2022
+```
+
 ### Displaying Speleothem MetaData `speleothems()`
-```{r show_speleothems_metadata}
-neotoma2::speleothems(kesang_sp)
+
+The function `speleothems()` aims to retrieve the speleothem metadata that exists in Neotoma.
+It can be applied to only one or multiple collection units:
+
+```{r `speleothems()`_on_a_collunit}
+gael_cu <- vallina_sp[[1]]@collunits[[5]]
+neotoma2::speleothems(gael_cu)
+```
+The problem here is, that `speleothems` does not link back to `datasets`. That is why it would seem like both entities point back to the same two dataset IDs. We need to create a path so that the `datasetID` can also be linked to it's own speleothem.
+
+Dataset **68606** belongs to **Gael_2022** and Dataset **69328** belongs to **Gael_2015** (This information is from the upload logs).
+
+
+```{r `speleothems()`_on_a_site}
+neotoma2::speleothems(vallina_sp)
 ```
 
 
 ### Displaying sample/speleothem data `speleothem_details()`
 ```{r speleothem_data_detail}
-data <- tryCatch({
-  neotoma2::speleothemdetails(kesang_sp)
-}, error = function(e) {
-  read.csv("data/kesang_data.csv")
-})
-
+data <- neotoma2::speleothemdetails(vallina_sp)
 head(data)
 ```
 
-## Taxa in Kesang
-```{r taxa}
-head(taxa(kesang_sp))
+Finding speleothems by Sr_Ca data:
+
+```{r find_speleothem_by_SrCa}
+get_sites(taxa='Strontium:Calcium', all_data=T) %>%
+  get_datasets() %>%
+  neotoma2::filter(datasettype == "speleothem") %>%
+  neotoma2::summary()
+```
+
+## Taxa in Vallina - different function name, but same behaviour.
+```{r renaming taxa}
+type_of_data <- taxa
+```
+
+```{r type_of_data}
+head(type_of_data(vallina_sp))
 ```
 
 ### Ordering the data in wide format `toWide()`
 
 ```{r toWide}
-values <- kesang_sp[[1]]@collunits[[1]] %>%
+values <- vallina_sp[[1]]@collunits[[1]] %>%
   samples() %>%
   toWide(ecologicalgroup = c("ITOP"),
          unit = c("per mille"),
@@ -121,12 +166,13 @@ values <- kesang_sp[[1]]@collunits[[1]] %>%
 values %>% 
   head() %>% 
   flextable() %>% 
+  add_header_lines(values=vallina_sp[[1]]@collunits[[1]]@handle) %>%
   fontsize(size = 8, part = "all") %>%
   autofit() 
 ```
 
 
-```{r data}
+```{r data values}
 # Make sure age is in descending order (younger to older)
 values <- values %>% arrange(desc(age))
 head(values)
@@ -149,102 +195,74 @@ p2 <- ggplot(values, aes(x = age, y = δ13C)) +
   labs(y = expression(delta^{13}*C* "("*"\u2030"*")"), x = "Age (years BP)")
 
 # Combine the two plots and add a title
-(p1 / p2) + plot_annotation(title = paste('Data from',kesang_sp[[1]]$sitename))
+(p1 / p2) + plot_annotation(title = paste('Data from',vallina_sp[[1]]$collunits[[1]]@handle, "(", vallina_sp[[1]]$sitename, ")"))
 ```
-
 ------
 
-I have copied some of the exercises in the simple workflow using the new neotoma2 functions for speleothems. 
+## Red Flags regarding Gael_2015 and Gael_2022
 
-Please review them and let me know if there is any issue.
+Because the speleothem data is associated to the collection unit, I do not have a way to trace back to which datasetID belongs to each speleothemID. I think this is something that we can correct in the upload process by changing the speleothems-collectionunits table to be speleothems-datasets table (or add a new one). 
 
-Following some functions of the simple_workflow:
+The data information exists for both datasets:
 
-```{r boundingBox}
-geoJSON <- '{"type": "Polygon",
-        "coordinates": [[
-            [-7.030,  36.011],
-            [-18.807, 23.537],
-            [-19.247, 10.282],
-            [-9.139,  -0.211],
-            [18.370, -37.546],
-            [35.069, -36.352],
-            [49.571, -27.097],
-            [58.185,   0.755],
-            [53.351,  13.807],
-            [43.946,  12.008],
-            [31.202,  33.629],
-            [18.897,  34.648],
-            [12.393,  35.583],
-            [11.075,  38.184],
-            [-7.030,  36.011]
-          ]
-        ]}'
+### Dataset **68606** belongs to **Gael_2022** entity **803**
 
-africa_sf <- geojsonsf::geojson_sf(geoJSON)
+```{r download_68606}
+gael2022_dl <- neotoma2::get_downloads(68606)
+gael2022_sp <- neotoma2::get_speleothems(gael2022_dl)
+neotoma2::speleothems(gael2022_sp)
+```
+You can see that the `datasetID` is being associated to both `entityID`s.
 
-# Note here we use the `all_data` flag to capture all the sites within the polygon.
-# We're using `all_data` here because we know that the site information is relatively small
-# for Africa. If we were working in a new area or with a new search we would limit the
-# search size.
-africa_sites <- neotoma2::get_sites(loc = africa_sf, all_data = FALSE)
-africa_sites
+Let's filter out for clarity:
+
+```{r download_68606_filtering_803}
+gael2022_dl <- neotoma2::get_downloads(68606)
+gael2022_sp <- neotoma2::get_speleothems(gael2022_dl)
+neotoma2::speleothems(gael2022_sp) %>% filter(entityid == 803)
 ```
 
-
-```{r datasetsFromSitesResult, message=FALSE}
-africa_datasets <- neotoma2::get_datasets(loc = africa_sf, all_data = TRUE)
-
-datasets(africa_datasets) %>% 
-  as.data.frame() %>% 
-  head() %>% 
-  flextable() %>% 
-  fontsize(size = 8, part = "all") %>%
-  width(width = 1.2) %>%
-  autofit() 
+```{r speleothem_68606_data_speleo}
+speleothem_data_68606 <- neotoma2::speleothemdetails(gael2022_sp)
+speleothem_data_68606 <- speleothem_data_68606 %>% dplyr::filter(entityid == 803) # To avoid duplicates since it is associated to two entities
+speleothem_data_68606 %>% head()
 ```
 
-
-```{r downloadsCode}
-africa_speleothem <- africa_datasets %>% 
-  neotoma2::filter(datasettype == 'speleothem')
-
-neotoma2::summary(africa_speleothem) %>% 
-  head() %>% 
-  flextable() %>% 
-  fontsize(size = 8, part = "all") %>%
-  autofit() 
+```{r checks_68606}
+samples_68606 <- neotoma2::samples(gael2022_sp)
+samples_68606 %>% 
+  filter(variablename == "δ13C") %>%
+  summarise(d13min = all(value >= -8.16),
+            d13max = all(value <= -3.83),
+            depth = all(depth >= 779)) %>%
+  mutate(entityname = speleothem_data_68606$entityname %>% unique()) %>%
+  select(entityname, depth, d13min, d13max)
 ```
 
-```{r taxaCode}
-africa_dl <- africa_speleothem %>% get_downloads() 
+### Dataset **69328** belongs to **Gael_2015**  or entity **804**
 
-as.data.frame(africa_dl) %>% 
-  head() %>% 
-  flextable() %>% 
-  fontsize(size = 8, part = "all") %>%
-  width(width = 1.2) %>%
-  autofit() 
+```{r download_69328_filtering_804}
+gael2015_dl <- neotoma2::get_downloads(69328)
+gael2015_sp <- neotoma2::get_speleothems(gael2015_dl)
+neotoma2::speleothems(gael2015_sp) %>% filter(entityid == 804)
 ```
 
-```{r add_entityCode}
-africa_sp <- get_speleothems(africa_dl)
-africa_sp
+```{r speleothem_69328_data}
+speleothem_data_69328 <- neotoma2::speleothemdetails(gael2015_sp)
+speleothem_data_69328 <- speleothem_data_69328 %>% dplyr::filter(entityid == 804) # To avoid duplicates since it is associated to two entities
+speleothem_data_69328 %>% head()
 ```
 
-```{r samp_w_entityCode}
-samp_w_entity <- speleothems(africa_sp)
-samp_w_entity
+```{r checks_69328}
+samples_69328 <- neotoma2::samples(gael2015_sp)
+samples_69328 %>% 
+  filter(variablename == "δ13C") %>%
+  summarise(d13min = all(value >= -9.72),
+            d13max = all(value <= -3.84),
+            depth = all(depth <= 841)) %>%
+  mutate(entityname = speleothem_data_69328$entityname %>% unique()) %>%
+  select(entityname, depth, d13min, d13max)
 ```
+**Conclusion regarding the red flag:** From the Database perspective, the insertions into Neotoma are correct. However, the problem lies that since the `speleothems` can only be traced back to their `collection unit`, and not to their `datasetID`, we cannot separate the data properly.
 
-
-
-```{r taxa2Code, message=FALSE}
-neotomatx <- africa_dl %>% taxa()
-neotomatx %>% 
-  head() %>% 
-  flextable() %>% 
-  fontsize(size = 8, part = "all")  %>%
-  width(width = 1.2) %>%
-  autofit() 
-```
+The duplication happens because if a collectionunit has more than 1 speleothem entities, then, the collectionunit can have the dataset more times, one for each speleothem entity.
