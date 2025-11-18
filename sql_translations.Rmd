@@ -297,7 +297,6 @@ SELECT entity.site_id, entity.entity_name, dating.date_type, dating.depth_dating
 SELECT entity.* FROM entity WHERE entity_id in (SELECT distinct(entity_id) FROM entity RIGHT JOIN dating_lamina USING(entity_id) LEFT JOIN sample USING(entity_id) LEFT JOIN original_chronology USING(sample_id) WHERE ann_lam_check != 'unknown');
 ```
 
-**NOTE** I have corrected chroncontroltype to be "uranium series" - this change will take a bit of time as API resets.
 
 ```{r}
 speleo_dl[[1]]@collunits[[2]]@chronologies[[2]]@chroncontrols

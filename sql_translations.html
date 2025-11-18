@@ -864,9 +864,6 @@ we only query this once, we will only get the dates but miss out the
 <p>[[17]] Extract list of entities for which dating_lamina exists and
 original_chronology.annual_lam_check is not “unknown”.</p>
 <pre class="sql"><code>SELECT entity.* FROM entity WHERE entity_id in (SELECT distinct(entity_id) FROM entity RIGHT JOIN dating_lamina USING(entity_id) LEFT JOIN sample USING(entity_id) LEFT JOIN original_chronology USING(sample_id) WHERE ann_lam_check != &#39;unknown&#39;);</code></pre>
-<p><strong>NOTE</strong> I have corrected chroncontroltype to be
-“uranium series” - this change will take a bit of time as API
-resets.</p>
 <pre class="r"><code>speleo_dl[[1]]@collunits[[2]]@chronologies[[2]]@chroncontrols</code></pre>
 <pre><code>##   depth thickness agelimityounger agelimitolder chroncontrolid chroncontrolage
 ## 1   779         5        537.5403      537.5403         154140        121259.8
