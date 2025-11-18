@@ -14,26 +14,350 @@ output:
   html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r setup, echo=FALSE}
+options(warn = -1)
+pacman::p_load(dplyr, tidyr, neotoma2)
+# Setting the working environment. When the data is in production, this step can be ommitted.
+Sys.setenv(APIPOINT = "https://api-dev.neotomadb.org/v2.0/")
 ```
 
-## R Markdown
+# Introduction
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+This document aims to translate some of the functions used in SISAL SQL database to R code using the neotoma2 package.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```sql
+SELECT * FROM sisalv3.site
 ```
 
-## Including Plots
+[[2]] To select all sites that contain speleothem data in Neotoma2, we can use the following R code:
 
-You can also embed plots, for example:
+```{r}
+get_sites(datasettype = "speleothem")
+```
+This does not retrieve all the columns available in the SQL database, but it provides the basic information about the sites with speleothem data.
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+[[3]] To retrieve how many entities we have in speleothem sites, we can do:
+
+```sql
+SELECT COUNT(*) FROM sisalv3.entity;
+```
+In R, we can achieve this by first getting the sites with speleothem data and then counting the entities associated with those sites:
+```{r}
+speleo_sites <- get_sites(datasettype = "speleothem")
+speleo_metadata <- get_speleothems(speleo_sites)
+speleothems(speleo_metadata) %>% nrow()
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+To understand which attributes an object in neotoma2 R has, we can use `names(object)`
+```{r}
+names(speleo_metadata)
+```
+
+We can access eac of this attributes by pointing out which one we want. For example, to see the site names:
+```{r}
+# The [[1]] points that we are at the first site in the list
+speleo_metadata[[1]]@sitename
+```
+[[4]] To select more information regarding a site in sql, the SQL statement was extended to:
+
+```sql
+SELECT site.site_name, site.latitude, site.longitude
+FROM sisalv3.site;
+```
+
+In R, to visualize all metadata regarding a site, besides using the slots, we can also use `data.frame` function:
+```{r}
+as.data.frame(speleo_metadata)
+```
+
+As a `data.frame` we can use **dplyr**'s function in case we want to select only specific fields:
+```{r}
+as.data.frame(speleo_metadata) %>%
+  select(sitename, lat, long)
+```
+
+[[5]] In SQL, entity data and site data where stored in different tables. This is the same in Neotoma. However, the r package does the link between these two objects.
+
+In sql, the query would have been:
+```sql
+SELECT entity.entity_name, site.site_name FROM entity, site WHERE entity.site_id = site.site_id;
+```
+OR
+```
+SELECT entity.entity_name, site.site_name FROM site LEFT JOIN entity USING(site_id);
+```
+
+**speleothem** data in the R model is inside the collection units. So can call the `speleothems()` function, which yields a `data.frame` that can be manipulated with **dplyr** functions:
+
+```{r}
+speleothems(speleo_metadata)
+```
+```{r}
+speleothems(speleo_metadata) %>%
+  select(entityid, sitename, entityname)
+```
+
+or we can visit each collection unit to see one speleothem at a time - which would not link information from above slots:
+```{r}
+speleo_metadata[[1]]@collunits[[1]]@speleothems
+```
+and also apply *dplyr** functions:
+```{r}
+speleo_metadata[[1]]@collunits[[1]]@speleothems
+```
+
+[[6]] We may want to rename columns, in SQL, we would do:
+```sql
+SELECT site_name as `site name`, longitude, latitude, elevation as `masl` FROM site;
+```
+
+but in dplyr, since we are working with data.frames, we can use the `rename()` function:
+```{r}
+as.data.frame(speleo_metadata) %>%
+  rename(`site name` = sitename, masl = elev)
+```
+[[10]] Create huge table with the following variables: 
+**site.site_name, site.latitude, site.longitude, entity.entity_name, sample.sample_id, d18O.d18O_measurement, hiatuses and original_chronology.interp_age***
+
+```sql
+SELECT site.site_name, site.latitude, site.longitude, entity.entity_name, sample.sample_id, d18O.d18O_measurement, hiatus.hiatus, original_chronology.interp_age, original_chronology.interp_age_uncert_pos, original_chronology.interp_age_uncert_neg  FROM site LEFT JOIN entity USING(site_id) LEFT JOIN sample USING(entity_id) LEFT JOIN original_chronology USING(sample_id) LEFT JOIN hiatus USING(sample_id) LEFT JOIN d18O USING(sample_id) WHERE interp_age IS NOT NULL;
+```
+
+The sites object `speleo_metadata` still does not contain any detailed data regarding the samples.
+When we are building R objects, in order to save memory, we are not downloading all the data by default.
+To download all the data, we can use the `get_speleothems()` function as shown above after having done `get_downloads()` That way, before executing `get_downloads()` we would have filtered by location, elevation, or other parameters of interest.
+
+In R, we can achieve this by first getting the sample data by using the `get_downloads()` function before the `get_speleothem()` function. We can then use the samples and speleothemdetails in coordination to obtain huge tables that we can join:
+
+```{r}
+# Get the sites with speleothem data
+speleo_sites <- get_sites(datasettype = "speleothem")
+# Download the data for those sites
+speleo_dl <- get_downloads(speleo_sites)
+# Get the speleothem metadata
+speleo_dl <- get_speleothems(speleo_dl)
+speleo_dl
+```
+`get_downloads()` retrieves all information regarding samples, including d18O and original chronologies.
+We can see more detail using `samples()` and `chronologies()`:
+
+```{r}
+samples(speleo_dl) %>% head()
+```
+```{r}
+chronologies(speleo_dl[[1]]@collunits[[2]])
+```
+
+We can also see how many datasets and chronologies we have in each Collection Unit with the `summary()` function:
+```{r}
+summary(speleo_dl)
+```
+Since the data is in a long format, we have information about every variable element, not just about the d18O, and one default chronology. In our case, all of the chronologies are marked as default, this will be changed to just have interp_age be the default chronology.
+
+
+with its uncertainties and remove from this table rows for which original_chronology.interp_age is NULL.
+
+entity.entity_name, sample.sample_id, d18O.d18O_measurement, hiatus.hiatus, original_chronology.interp_age, original_chronology.interp_age_uncert_pos, original_chronology.interp_age_uncert_neg  FROM site LEFT JOIN entity USING(site_id) LEFT JOIN sample USING(entity_id) LEFT JOIN original_chronology USING(sample_id) LEFT JOIN hiatus USING(sample_id) LEFT JOIN d18O USING(sample_id) WHERE interp_age IS NOT NULL;
+
+
+```{r}
+sample_data <- samples(speleo_dl[[1]])
+speleo_detail <- speleothemdetails(speleo_dl)
+
+huge_table <- sample_data %>%
+  # suffix is to avoid duplicate column names
+  left_join(speleo_detail, by = "sampleid",suffix = c("", "_speleo")) %>% 
+  select(sitename, lat, long, entityname,
+         sampleid, variablename, value, #hiatus
+         chronologyname)
+huge_table %>% head()
+```
+Here we obtain all the information in a long format.
+Since we can use dplyr, we can filter by or entityname:
+
+```{r}
+ huge_table %>%
+  filter(entityname == "Gael_2015") %>%
+  count(variablename, name = "count")  %>%
+  head()
+```
+```{r}
+ huge_table %>%
+  filter(entityname == "Gael_2022") %>%
+  count(variablename, name = "count") %>% 
+  head()
+```
+
+To only retrieve the d18O measurements and the interp_age chronology, we can filter by those variables:
+```{r}
+huge_table %>%
+  filter(variablename == "δ18O" & chronologyname == "lin_interp_age") %>% 
+  head()
+```
+
+[[11]] Extract d18O_measurements, hiatuses, interpolated ages and its uncertainties for all entities from "Liang Luar cave".
+```sql
+SELECT entity.entity_name, hiatus.hiatus, original_chronology.interp_age, original_chronology.interp_age_uncert_pos, original_chronology.interp_age_uncert_neg, d18O.d18O_measurement FROM site LEFT JOIN entity USING(site_id) LEFT JOIN sample USING(entity_id) LEFT JOIN hiatus USING(sample_id) LEFT JOIN d18O USING(sample_id) LEFT JOIN original_chronology USING(sample_id) WHERE site.site_name = 'Liang Luar cave';
+```
+
+```r
+liang_speleo <- get_sites(datasettype = "speleothem", sitename = "Liang Luar cave")
+liang_speleo <- get_downloads(liang_speleo)
+liang_speleo <- get_speleothems(liang_speleo)
+liang_samples <- samples(liang_speleo[[1]])
+liang_speleo_details <- speleothemdetails(liang_speleo)
+liang_table <- liang_samples %>%
+  left_join(liang_speleo_details, by = "sampleid", suffix = c("", "_speleo")) %>%
+  select(entityname, variablename, value, chronologyname)
+liang_table %>%
+  filter(variablename == "δ18O" & chronologyname == "interp_age")
+```
+
+[[12]] Extract d18O_measurements, hiatuses, interpolated ages and its uncertainties for all calcite samples which d18O water is in equilibrium and has interpolated ages.
+
+```sql
+SELECT entity.entity_name, hiatus.hiatus, original_chronology.interp_age, original_chronology.interp_age_uncert_pos, original_chronology.interp_age_uncert_neg, d18O.d18O_measurement FROM site LEFT JOIN entity USING(site_id) LEFT JOIN sample USING(entity_id) LEFT JOIN hiatus USING(sample_id) JOIN d18O USING(sample_id) JOIN original_chronology USING(sample_id) WHERE sample.mineralogy = 'calcite' AND entity.d18O_water_equilibrium = 'yes' AND original_chronology.interp_age IS NOT NULL;
+```
+```r
+speleo_sites <- get_sites(datasettype = "speleothem")
+speleo_dl <- get_downloads(speleo_sites)
+speleo_dl <- get_speleothems(speleo_dl)
+speleo_samples <- samples(speleo_dl[[1]])
+speleo_details <- speleothemdetails(speleo_dl)
+calcite_obs <- speleo_details %>%
+filter(geology=="calcite)
+calcite_table <- speleo_samples %>%
+  inner_join(calcite_obs, by = "sampleid", suffix = c("", "_speleo")) %>%
+  # filter(d18O_water_equilibrium == "yes") %>% # there is no water.equilibrium in db. Where to add?
+  select(entityname, variablename, value, chronologyname)
+```
+
+[[13]] Extract d18O_measurements, hiatuses, interpolated ages and its uncertainties for all aragonite samples which have been corrected for and have interpolated ages.
+```sql
+SELECT entity.entity_name, hiatus.hiatus, original_chronology.interp_age, original_chronology.interp_age_uncert_pos, original_chronology.interp_age_uncert_neg, d18O.d18O_measurement FROM site LEFT JOIN entity USING(site_id) LEFT JOIN sample USING(entity_id) LEFT JOIN hiatus USING(sample_id) JOIN d18O USING(sample_id) JOIN original_chronology USING(sample_id) WHERE sample.mineralogy = 'aragonite' AND sample.arag_corr = 'yes' AND original_chronology.interp_age IS NOT NULL;
+```
+
+```r
+speleo_sites <- get_sites(datasettype = "speleothem")
+speleo_dl <- get_downloads(speleo_sites)
+speleo_dl <- get_speleothems(speleo_dl)
+speleo_samples <- samples(speleo_dl[[1]])
+speleo_details <- speleothemdetails(speleo_dl)
+aragonite_obs <- speleo_details %>%
+  filter(geology=="aragonite")
+aragonite_table <- speleo_samples %>%
+  inner_join(aragonite_obs, by = "sampleid", suffix = c("", "_speleo")) %>%
+  filter(variablename == "δ18O") %>%
+  # filter(arag_corr == "yes",  !is.na(chronologyname)) %>% # there is no arag_corr in db. Where to add?
+  select(entityname, variablename, value, chronologyname)
+```
+
+[[14]] Extract d18O_measurements, hiatuses, interpolated ages and its uncertainties from "LR07-E1", from "Liang Luar cave". Note that we should always specify the site name as there could be entities with the same name from multiple sites.
+```sql
+SELECT entity.entity_name, hiatus.hiatus, original_chronology.interp_age, original_chronology.interp_age_uncert_pos, original_chronology.interp_age_uncert_neg, d18O.d18O_measurement FROM site LEFT JOIN entity USING(site_id) LEFT JOIN sample USING(entity_id) LEFT JOIN hiatus USING(sample_id) LEFT JOIN d18O USING(sample_id) LEFT JOIN original_chronology USING(sample_id) WHERE site.site_name = 'Liang Luar cave' AND entity.entity_name = 'LR07-E1';]]
+```
+
+```r
+liang_speleo <- get_sites(sitename = "Liang Luar cave", datasettype = "speleothem")
+liang_speleo <- get_downloads(liang_speleo)
+liang_speleo <- get_speleothems(liang_speleo)
+liang_samples <- samples(liang_speleo[[1]])
+liang_speleo_details <- speleothemdetails(liang_speleo)
+lr07e1_obs <- liang_speleo_details %>%
+  filter(entityname == "LR07-E1")
+lr07e1_table <- liang_samples %>%
+  inner_join(lr07e1_obs, by = "sampleid", suffix = c("", "_speleo")) %>%
+  filter(variablename == "δ18O") %>%
+  select(entityname, variablename, value, chronologyname)
+```
+
+[[15]] Extract details of entities with more than one date type but not including the 'Events' or unknown.
+
+```sql
+SELECT entity.* FROM entity WHERE entity_id in (SELECT entity_id FROM (SELECT * from dating  WHERE date_type NOT LIKE '%Event%' AND date_type != 'unknown') AS T GROUP BY entity_id HAVING count(distinct(T.date_type)) > 2);
+```
+
+```r
+Filter in chronologies?
+We need to add API points, next iteration of neotoma2
+```
+[[16]] Extract details of entities and dating information which were used in author's age model reconsturction and the date type is of U/Th methods ('MC-ICP-MS U/Th', 'ICP-MS U/Th Other', 'Alpha U/Th', 'TIMS' and 'U/Th unspecified') and the speleothem type is not flowstone. Note that this query is relatively long as I queried for the hiatuses as well. If we only query this once, we will only get the dates but miss out the 'Events' which may be useful for age model reconstruction.
+
+```sql
+SELECT entity.site_id, entity.entity_name, dating.date_type, dating.depth_dating, dating.corr_age, dating.corr_age_uncert_pos, dating.corr_age_uncert_neg FROM entity LEFT JOIN dating USING(entity_id) WHERE entity_id IN (SELECT entity_id FROM entity LEFT JOIN dating USING(entity_id) WHERE dating.date_used = 'yes' AND (dating.date_type LIKE '%U/Th%' OR dating.date_type = 'TIMS') AND entity.speleothem_type != 'flowstone') AND dating.date_used = 'yes' AND (dating.date_type LIKE '%U/Th%' OR dating.date_type = 'TIMS' OR dating.date_type LIKE '%Event%');
+```
+```r
+# Need to add API points, next iteration of neotoma2
+
+```
+
+[[17]] Extract list of entities for which dating_lamina exists and original_chronology.annual_lam_check is not "unknown".
+
+```sql
+SELECT entity.* FROM entity WHERE entity_id in (SELECT distinct(entity_id) FROM entity RIGHT JOIN dating_lamina USING(entity_id) LEFT JOIN sample USING(entity_id) LEFT JOIN original_chronology USING(sample_id) WHERE ann_lam_check != 'unknown');
+```
+
+**NOTE** I have corrected chroncontroltype to be "uranium series" - this change will take a bit of time as API resets.
+
+```{r}
+speleo_dl[[1]]@collunits[[2]]@chronologies[[2]]@chroncontrols
+```
+
+
+18. Extract list of all entities for which interpolated ages are not available (partially or totally, omitting samples that only provide information on hiatuses).
+
+```sql
+SELECT * FROM entity WHERE entity_id in (SELECT distinct(entity_id) FROM sample LEFT JOIN original_chronology USING(sample_id) LEFT JOIN hiatus USING(sample_id) WHERE interp_age IS NULL AND hiatus IS NULL);
+```
+
+```r
+Need api for hiatus
+```
+
+[[19]] Extract site name, entity name, date type, depths, depth reference point, corrected age of dates used in the original age models for LR07-E1 from Liang Luar cave.
+
+```sql
+SELECT site.site_name, entity.entity_name, dating.date_type, dating.depth_dating, entity.depth_ref, dating.corr_age FROM site LEFT JOIN entity USING(site_id) LEFT JOIN dating USING(entity_id) WHERE dating.date_used = 'yes' AND entity_name = 'LR07-E1' AND site_name = 'Liang Luar cave';
+```
+
+```r
+```
+
+[[20]] Extract site details and the average d18O measurements.
+
+```sql
+SELECT site.*, count(distinct(entity.entity_id)) as 'entity_counts', avg(d18O.d18O_Measurement) as 'mean_d18O' FROM site LEFT JOIN entity USING (site_id) LEFT JOIN sample USING (entity_id) LEFT JOIN d18O USING (sample_id) GROUP BY site.site_id;
+```
+
+```r
+speleo_sites <- get_sites(datasettype = "speleothem")
+speleo_dl <- get_downloads(speleo_sites)
+speleo_dl <- get_speleothems(speleo_dl)
+speleo_samples <- samples(speleo_dl[[1]])
+speleo_details <- speleothemdetails(speleo_dl)
+speleo_samples %>%
+  inner_join(speleo_details, by = "sampleid", suffix = c("", "_speleo")) %>%
+  filter(variablename == "δ18O") %>%
+  group_by(sitename) %>%
+  summarize(entity_counts = n_distinct(entityname),
+            mean_d18O = mean(value, na.rm = TRUE)) %>%
+  select(entityname, variablename, value, chronologyname)
+```
+
+[[21]] Extract d18O samples which have ages younger than 22000 years old and older than 1000 years old (BP 1950). This type of query works with all columns which are numeric.
+
+```sql
+SELECT site.site_name, entity.entity_name, hiatus.hiatus, original_chronology.interp_age, original_chronology.interp_age_uncert_pos, original_chronology.interp_age_uncert_neg, d18O.d18O_measurement FROM site LEFT JOIN entity USING(site_id) LEFT JOIN sample USING(entity_id) LEFT JOIN hiatus USING(sample_id) LEFT JOIN d18O USING(sample_id) LEFT JOIN original_chronology USING(sample_id) WHERE original_chronology.interp_age <= 22000 AND original_chronology.interp_age >= 1000;
+```
+
+```r
+speleo_sites <- get_sites(datasettype = "speleothem")
+speleo_dl <- get_downloads(speleo_sites)
+speleo_dl <- get_speleothems(speleo_dl)
+speleo_samples <- samples(speleo_dl[[1]])
+speleo_details <- speleothemdetails(speleo_dl)
+speleo_samples %>%
+  inner_join(speleo_details, by = "sampleid", suffix = c("", "_speleo")) %>%
+  filter(variablename == "δ18O", 1000 <= age <= 22000)
+```
+
