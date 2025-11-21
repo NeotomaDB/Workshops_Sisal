@@ -29,11 +29,15 @@ We can work from a locally deployed API or from the development branch as of now
 # Setting the working environment. When the data is in production, this step can be ommitted.
 Sys.setenv(APIPOINT = "https://api-dev.neotomadb.org/v2.0/")
 ```
+## Sites with speleothem data:
+```{r}
+speleost <- get_datasets(datasettype = "%speleothem%")
+speleost
+```
 
 ## Searching one cave
 ```{r}
-vallina <- get_sites(sitename = "%La Vallina%") %>%
-  get_datasets()
+vallina <- get_datasets(sitename = "%La Vallina%")
 plotLeaflet(vallina)
 ```
 
@@ -195,65 +199,74 @@ p2 <- ggplot(values, aes(x = age, y = δ13C)) +
 
 Because the speleothem data is associated to the collection unit, I was wrongly associating the speleothem to the collection unit instead of associating the collection unit to the speleothem. I have then fixed this. However, I cannot use `persist_id` as handle as the handle must be UNIQUE.
 
-### Dataset **66337** belongs to **Gael_2015**  or entity **804**
+### Dataset **66361** belongs to **Gael_2015**  or entity **804**
 
-```{r download_66337_filtering_804}
-gael2015_dl <- neotoma2::get_downloads(66337)
+```{r download_66361_filtering_804}
+gael2015_dl <- neotoma2::get_downloads(66361)
 gael2015_sp <- neotoma2::get_speleothems(gael2015_dl)
 neotoma2::speleothems(gael2015_sp)
 ```
 
-```{r speleothem_66337_data}
-speleothem_data_66337 <- neotoma2::speleothemdetails(gael2015_sp)
-speleothem_data_66337 %>% head()
+```{r speleothem_66361_data}
+speleothem_data_66361 <- neotoma2::speleothemdetails(gael2015_sp)
+speleothem_data_66361 %>% head()
 ```
 
-```{r checks_66337}
-samples_66337 <- neotoma2::samples(gael2015_sp) %>%
-  left_join(speleothem_data_66337 %>% 
+```{r checks_66361}
+samples_66361 <- neotoma2::samples(gael2015_sp) %>%
+  left_join(speleothem_data_66361 %>% 
               select(entityid, entityname, datasetid, sampleid),
             by = c("datasetid", "sampleid"))
-samples_66337 %>% 
+samples_66361 %>% 
   filter(variablename == "δ13C") %>%
   summarise(d13min = all(value >= -9.72),
             d13max = all(value <= -3.84),
             depth = all(depth <= 841),
             entityid = all(entityid == 804),
-            datasetid = all(datasetid == 66337)) %>%
-  mutate(entityname = samples_66337$entityname %>% unique()) %>%
+            datasetid = all(datasetid == 66361)) %>%
+  mutate(entityname = samples_66361$entityname %>% unique()) %>%
   select(entityname, depth, d13min, d13max, entityid, datasetid)
 ```
 
 
-### Dataset **66339** belongs to **Gael_2022** entity **803**
+### Dataset **66345** belongs to **Gael_2022** entity **803**
 
-```{r download_66339}
-gael2022_dl <- neotoma2::get_downloads(66339)
+```{r download_66345}
+gael2022_dl <- neotoma2::get_downloads(66345)
 gael2022_sp <- neotoma2::get_speleothems(gael2022_dl)
 neotoma2::speleothems(gael2022_sp)
 ```
 You can see that the `datasetID` is being associated to both `entityID`s.
 
 
-```{r speleothem_66339_data_speleo}
-speleothem_data_66339 <- neotoma2::speleothemdetails(gael2022_sp)
-speleothem_data_66339 %>% head()
+```{r speleothem_66345_data_speleo}
+speleothem_data_66345 <- neotoma2::speleothemdetails(gael2022_sp)
+speleothem_data_66345 %>% head()
 ```
 
-```{r checks_66339}
-samples_66339 <- neotoma2::samples(gael2022_sp) %>%
-  left_join(speleothem_data_66339 %>% 
+```{r}
+chronologies(gael2022_sp)
+```
+
+```{r}
+samples(gael2022_sp) %>% head()
+```
+
+
+```{r checks_66345}
+samples_66345 <- neotoma2::samples(gael2022_sp) %>%
+  left_join(speleothem_data_66345 %>% 
               select(entityid, entityname, datasetid, sampleid),
             by = c("datasetid", "sampleid"))
 
-samples_66339 %>% 
+samples_66345 %>% 
   filter(variablename == "δ13C") %>%
   summarise(d13min = all(value >= -8.16),
             d13max = all(value <= -3.83),
             depth = all(depth >= 779),
             entityid = all(entityid == 803),
-            datasetid = all(datasetid == 66339)) %>%
-  mutate(entityname = samples_66337$entityname %>% unique()) %>%
+            datasetid = all(datasetid == 66345)) %>%
+  mutate(entityname = samples_66361$entityname %>% unique()) %>%
   select(entityname, depth, d13min, d13max, entityid, datasetid)
 ```
 ### Downloading Gael_2015 and Gael_2022 at the same time
@@ -291,7 +304,7 @@ testing803 <- testing %>%
   summarise(d13min = all(value >= -8.16),
             d13max = all(value <= -3.83),
             depth = all(depth >= 779),
-            datasetid = all(datasetid == 66339),
+            datasetid = all(datasetid == 66345),
             entityid = all(entityid == 803)) %>%
   mutate(entityid_c = "803") %>%
   select(entityid_c, depth, d13min, d13max, datasetid, entityid)
@@ -305,7 +318,7 @@ testing804 <- testing %>%
             d13max = all(value <= -3.84),
             depth = all(depth <= 841),
             entityid = all(entityid == 804),
-            datasetid = all(datasetid == 66337)) %>%
+            datasetid = all(datasetid == 66361)) %>%
   mutate(entityid_c = "804") %>%
   select(entityid_c, depth, d13min, d13max, datasetid, entityid)
 testing804
@@ -313,3 +326,22 @@ testing804
 
 
 **Conclusion regarding the red flag:** I have corrected the database so that one speleothem can have multiple collection units but one collection unit can only have one speleothem.
+
+
+---
+
+## Other Available Speleothems
+
+```{r}
+speleost <- get_datasets(datasettype = "%speleothem%")
+speleost <- get_speleothems(speleost)
+speleost
+```
+
+```{r}
+speleothems(speleost)
+```
+
+```{r}
+speleothemdetails(speleost)
+```
